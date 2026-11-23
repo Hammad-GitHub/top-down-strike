@@ -132,3 +132,4 @@ int Bomb::getSiteIndex() const { return siteIndex; }
 float Bomb::getPlantPercent() const { return plantProgress / plantTime; }
 float Bomb::getDefusePercent() const { return defuseProgress / defuseTime; }
 float Bomb::getTimeLeft() const { return timeLeft; }
+
