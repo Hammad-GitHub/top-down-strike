@@ -2,37 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Run Raylib Game",
+      "name": "Run top-down-strike (F5)",
       "type": "cppdbg",
       "request": "launch",
-      "program": "${workspaceFolder}/build/game.exe",
+      "program": "${workspaceFolder}/top-down-strike.exe",
       "args": [],
       "stopAtEntry": false,
       "cwd": "${workspaceFolder}",
       "environment": [],
-      "externalConsole": true,
+      "externalConsole": false,
       "MIMode": "gdb",
-      "miDebuggerPath": "C:/raylib/w64devkit/bin/gdb.exe",
-      "preLaunchTask": "Build Raylib"
-    },
-    {
-      "name": "C/C++ Runner: Debug Session",
-      "type": "cppdbg",
-      "request": "launch",
-      "args": [],
-      "stopAtEntry": false,
-      "externalConsole": true,
-      "cwd": "d:/Fast NUCES/Fall 2026/CL1004-Object Oriented Programming - Lab/Project/setup",
-      "program": "d:/Fast NUCES/Fall 2026/CL1004-Object Oriented Programming - Lab/Project/setup/build/Debug/outDebug",
-      "MIMode": "gdb",
-      "miDebuggerPath": "C:/raylib/w64devkit/bin/gdb.exe",
+      "miDebuggerPath": "gdb",
       "setupCommands": [
-        {
-          "description": "Enable pretty-printing for gdb",
-          "text": "-enable-pretty-printing",
-          "ignoreFailures": true
-        }
-      ]
+        { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+      ],
+      "preLaunchTask": "build top-down-strike (debug)"
     }
   ]
 }

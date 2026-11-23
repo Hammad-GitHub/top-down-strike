@@ -1,0 +1,118 @@
+VIVA PREPARATION - questions your OOP instructor may ask (with short answers)
+=============================================================================
+
+--- INHERITANCE ---
+Q1. Which classes use inheritance in your project?
+A.  Character -> Player, Enemy.  Enemy -> NormalTerrorist, AggressiveTerrorist,
+    SniperTerrorist.  Weapon -> Pistol, AssaultRifle, Shotgun, SniperRifle.
+Q2. Why make Player and Enemy inherit from Character?
+A.  Both have position, health, speed and must move with collision and take
+    damage. Writing it once in Character avoids duplicate code.
+Q3. What type of inheritance is this?  A. Single (and multilevel: Character -> Enemy -> SniperTerrorist).
+Q4. What does "protected" mean and why did you use it in Character?
+A.  Accessible in the class and derived classes but not from outside. Derived classes
+    need position/health; the outside world must not change them directly.
+Q5. In what order are constructors/destructors called?
+A.  Base constructor first, then derived. Destructors run in reverse (derived first).
+    Example: Character -> Enemy -> SniperTerrorist.
+Q6. How do you call the base version of an overridden function?
+A.  Weapon::update(dt) inside AssaultRifle::update(); Character::takeDamage(amount) in Player::takeDamage.
+
+--- POLYMORPHISM ---
+Q7. Where do you use runtime polymorphism?
+A.  Game::updatePlaying and drawWorld call enemies[i]->update()/draw() through Enemy pointers;
+    Weapon::tryFire calls the virtual shoot(); Enemy::update calls virtual behave() and attack().
+Q8. What is a virtual function? How does it work?
+A.  A function resolved at runtime using the object's real type, through the vtable
+    (a table of function pointers, one per class, with a hidden vptr in each object).
+Q9. What is the difference between overloading and overriding?
+A.  Overloading: same name, different parameters, resolved at compile time.
+    Overriding: same signature in a derived class, resolved at runtime (needs virtual).
+Q10. Why does Weapon (and Character) need a virtual destructor?
+A.  Objects are deleted through base pointers (unique_ptr<Weapon>). Without it only the base
+    destructor runs -> undefined behaviour / leaks of derived resources.
+Q11. What does the "override" keyword do?
+A.  Tells the compiler this function must override a base virtual function; a typo or
+    signature mismatch becomes a compile error.
+Q12. What is object slicing and how do you avoid it?
+A.  Copying a derived object into a base object by value loses the derived part. We store
+    pointers (unique_ptr<Enemy>), never Enemy objects by value.
+Q13. Show me a place where different enemies behave differently.
+A.  behave(): Normal strafes, Aggressive rushes, Sniper retreats. attack(): different bullet
+    speed, size, damage, fire rate.
+
+--- ABSTRACTION ---
+Q14. What is an abstract class? Which ones do you have?
+A.  A class with at least one pure virtual function (= 0); it cannot be instantiated.
+    Character, Enemy, Weapon.
+Q15. Can an abstract class have a constructor, data and normal functions?  A. Yes. Derived
+    constructors call it. Our Weapon has stats/ammo and normal functions like tryFire().
+Q16. What happens if a derived class does not override all pure virtual functions?
+A.  It stays abstract and cannot be instantiated.
+Q17. Why is Weapon::shoot() pure virtual but tryFire() not?
+A.  Every weapon fires differently (shoot), but the rules (ammo, cooldown, reload) are the same,
+    so they are written once in tryFire (Template Method pattern).
+
+--- ENCAPSULATION ---
+Q18. How is encapsulation used?
+A.  Private/protected data and public functions: takeDamage() clamps health at 0, Weapon controls
+    ammo/reload itself, Bomb controls its state transitions through plant()/defuse().
+Q19. Why not make everything public?
+A.  Any code could put objects in an invalid state (negative health, ammo > magazine). Private data
+    plus member functions keeps rules in one place and makes changes easy.
+Q20. What are getters/setters and which do you have?
+A.  Functions that read/change private data: getHealth(), getPosition(), setPosition(), getAmmo()...
+Q21. What does a const member function mean?
+A.  It promises not to modify the object, e.g. int Weapon::getAmmo() const.
+
+--- COMPOSITION & MEMORY ---
+Q22. What is composition? Difference from inheritance?
+A.  HAS-A vs IS-A. Game HAS-A Player/Map/Bomb; Player HAS Weapons; a Player IS-A Character.
+Q23. Why unique_ptr instead of raw new/delete?
+A.  Automatic deletion (RAII), no leaks, clear single ownership. enemies.erase() destroys a dead enemy.
+Q24. Why can't you copy a unique_ptr? How do you move it?  A. Ownership is unique; vector moves it on
+    erase/push_back (std::move / rvalue).
+Q25. Where is memory allocated and freed?
+A.  Enemies: new in Game::startRound, wrapped in unique_ptr, freed on erase/clear/Game destruction.
+    Weapons: new in Player constructor, freed with the Player.
+Q26. What is RAII?  A. Resources are tied to object lifetime: acquired in constructor, released in destructor.
+
+--- GAME LOGIC ---
+Q27. How does enemy AI detect the player?
+A.  distance <= detectRange AND Map::lineBlocked() is false (segment-vs-rectangle test against walls).
+Q28. How do you handle collision with walls?
+A.  Character::moveBy tests X and Y separately with CheckCollisionCircleRec so the character slides
+    along walls. Bullets move in small sub-steps and stop when the point is inside a wall.
+Q29. How do bullets hit enemies without skipping them at high speed?
+A.  Swept test: Game::updateBullets checks the segment previous->current position against the circle.
+Q30. How does bomb planting work?
+A.  A planter terrorist walks to the site; when within 25 px, Game calls Bomb::plant(dt) every frame.
+    After 3 s state = Planted and a 40 s countdown starts. If the planter dies, plant is cancelled and
+    another terrorist takes the bomb.
+Q31. How does the player defuse?
+A.  Holding E within 70 px calls Bomb::defuse(dt); progress reaches 5 s -> Defused. Releasing resets it.
+Q32. How do rounds and difficulty scale?
+A.  Enemy count = 2 + round; Enemy::applyDifficulty(round) multiplies health, damage, speed and fire
+    rate and shrinks spread.
+Q33. What does the game state enum do?
+A.  enum class GameState {MENU, PLAYING, PAUSED, ROUND_WON, GAME_OVER, VICTORY} drives update() and
+    draw() with a switch (a simple state machine).
+Q34. Why is dt (delta time) used?
+A.  Movement = speed * dt makes the game speed independent of frame rate.
+Q35. Why do you pass bullets by reference (std::vector<Bullet>&)?
+A.  So characters/weapons add bullets to Game's one vector without copying it.
+
+--- C++ GENERAL ---
+Q36. What is the difference between struct and class?  A. Default access: public vs private. WeaponStats is a
+    struct (plain data); Weapon is a class (behaviour).
+Q37. What is an initializer list and why use it?
+A.  `: Character(pos, r, spd, hp), damage(dmg)` initializes base and members before the constructor body;
+    required for base classes, const and reference members.
+Q38. What is a forward declaration?  A. `class Map;` in Bullet.h / Character.h so headers do not include
+    each other; the .cpp includes the full header.
+Q39. What are include guards?  A. #ifndef/#define/#endif prevent a header being included twice.
+Q40. What is an enum class?  A. A scoped, type-safe enumeration: BombState::Planted.
+Q41. How would you add a new weapon/enemy?
+A.  Create a derived class, implement shoot() (or behave()/attack()), add it in Player's constructor
+    (or Game::startRound). No change is needed in the rest of the code - that is the benefit of polymorphism.
+Q42. Could Enemy/Weapon be an interface?  A. Yes, if all functions were pure virtual; here we also keep shared data.
