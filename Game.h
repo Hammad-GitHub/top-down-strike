@@ -1,4 +1,4 @@
-// Part 3: Top-level Game orchestrator, composition, and GameState machine
+// Game.h - owns every object in the game (composition) and runs the main loop.
 #ifndef GAME_H
 #define GAME_H
 
