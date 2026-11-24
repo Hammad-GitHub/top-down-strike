@@ -357,3 +357,340 @@ void Game::updateBomb(float dt)
                 enemies[i]->setPatrolArea(bomb.getPosition(), 160.0f);
             }
             char buf[96];
+            snprintf(buf, sizeof(buf), "The bomb has been planted at SITE %c! Defuse it!",
+                     map.getSiteLabel(bomb.getSiteIndex()));
+            showMessage(buf, 4.0f);
+        }
+    }
+
+    // ---- Player defuses (hold E close to the bomb, standing still)
+    if (bomb.isPlanted() && player->isAlive() &&
+        util::distance(player->getPosition(), bomb.getPosition()) <= DEFUSE_RANGE)
+    {
+        if (IsKeyDown(KEY_E))
+        {
+            player->setBusy(true);
+            bomb.defuse(dt);
+        }
+        else
+        {
+            player->setBusy(false);
+            bomb.stopDefuse();
+        }
+    }
+    else
+    {
+        player->setBusy(false);
+        bomb.stopDefuse();
+    }
+
+    bomb.update(dt);   // countdown
+}
+
+void Game::checkRoundEnd()
+{
+    if (!player->isAlive())
+        endRound(false, "You were eliminated.");
+    else if (bomb.isExploded())
+        endRound(false, "The bomb exploded. Terrorists win.");
+    else if (bomb.isDefused())
+        endRound(true, "Bomb defused. Counter-Terrorists win!");
+    else if (enemies.empty() && !bomb.isPlanted())
+        endRound(true, "All terrorists eliminated. Counter-Terrorists win!");
+}
+
+// ================================================================ drawing
+
+void Game::drawCentered(const std::string& text, int y, int size, Color color) const
+{
+    int w = MeasureText(text.c_str(), size);
+    DrawText(text.c_str(), (SCREEN_W - w) / 2, y, size, color);
+}
+
+void Game::draw()
+{
+    BeginDrawing();
+    ClearBackground(util::rgba(15, 17, 22));
+
+    if (state == GameState::MENU)
+    {
+        ShowCursor();
+        drawMainMenu();
+    }
+    else
+    {
+        if (state == GameState::PLAYING && introTimer <= 0.0f) HideCursor();
+        else ShowCursor();
+
+        drawWorld();
+        drawHUD();
+
+        if (state == GameState::PLAYING && introTimer <= 0.0f) drawCrosshair();
+        else if (state == GameState::PAUSED) drawPauseMenu();
+        else if (state == GameState::ROUND_WON) drawRoundWon();
+        else if (state == GameState::GAME_OVER || state == GameState::VICTORY) drawEndScreen();
+    }
+
+    EndDrawing();
+}
+
+void Game::drawWorld() const
+{
+    BeginMode2D(camera);
+
+    map.draw();
+    bomb.draw();
+
+    for (size_t i = 0; i < effects.size(); i++) effects[i].draw();
+    for (size_t i = 0; i < bullets.size(); i++) bullets[i].draw();
+
+    // Enemies behind walls are hidden (line of sight), like in classic tactical shooters
+    for (size_t i = 0; i < enemies.size(); i++)
+        if (isVisibleToPlayer(enemies[i]->getPosition()))
+            enemies[i]->draw();                       // virtual call
+
+    player->draw();
+
+    EndMode2D();
+}
+
+void Game::drawCrosshair() const
+{
+    Vector2 m = GetMousePosition();
+    int x = (int)m.x, y = (int)m.y;
+    Color c = util::rgba(80, 255, 120);
+    DrawLine(x - 14, y, x - 5, y, c);
+    DrawLine(x + 5, y, x + 14, y, c);
+    DrawLine(x, y - 14, x, y - 5, c);
+    DrawLine(x, y + 5, x, y + 14, c);
+    DrawCircleLines(x, y, 2.0f, c);
+}
+
+void Game::drawMinimap() const
+{
+    Rectangle area = util::rect(SCREEN_W - 230.0f, 10.0f, 220.0f, 165.0f);
+    map.drawMinimap(area);
+    float s = area.width / map.getWidth();
+
+    // Bomb (while being planted or ticking)
+    if (bomb.isPlanting() || bomb.isPlanted())
+    {
+        Vector2 b = bomb.getPosition();
+        DrawCircle((int)(area.x + b.x * s), (int)(area.y + b.y * s), 4.0f, RED);
+    }
+
+    // Only terrorists the player can currently see
+    for (size_t i = 0; i < enemies.size(); i++)
+    {
+        Vector2 p = enemies[i]->getPosition();
+        if (isVisibleToPlayer(p))
+            DrawCircle((int)(area.x + p.x * s), (int)(area.y + p.y * s), 3.0f, util::rgba(255, 90, 90));
+    }
+
+    Vector2 p = player->getPosition();
+    DrawCircle((int)(area.x + p.x * s), (int)(area.y + p.y * s), 4.0f, util::rgba(80, 255, 120));
+}
+
+void Game::drawBombStatus() const
+{
+    int w = 360, h = 74;
+    int x = (SCREEN_W - w) / 2 - 20, y = 10;
+    DrawRectangle(x, y, w, h, Fade(BLACK, 0.6f));
+    DrawRectangleLines(x, y, w, h, util::rgba(120, 120, 130));
+
+    char buf[96];
+    switch (bomb.getState())
+    {
+        case BombState::NotPlanted:
+            DrawText("BOMB: NOT PLANTED", x + 14, y + 10, 20, RAYWHITE);
+            snprintf(buf, sizeof(buf), "Terrorists are going for SITE %c", map.getSiteLabel(targetSite));
+            DrawText(buf, x + 14, y + 40, 16, util::rgba(255, 200, 80));
+            break;
+
+        case BombState::Planting:
+            snprintf(buf, sizeof(buf), "BOMB BEING PLANTED  (%d%%)", (int)(bomb.getPlantPercent() * 100.0f));
+            DrawText(buf, x + 14, y + 10, 20, util::rgba(255, 170, 40));
+            DrawRectangle(x + 14, y + 44, w - 28, 12, util::rgba(30, 30, 30));
+            DrawRectangle(x + 14, y + 44, (int)((w - 28) * bomb.getPlantPercent()), 12, util::rgba(255, 170, 40));
+            break;
+
+        case BombState::Planted:
+        {
+            bool blink = ((int)(bomb.getTimeLeft() * 2.0f)) % 2 == 0;
+            snprintf(buf, sizeof(buf), "BOMB PLANTED - SITE %c   %.1fs",
+                     map.getSiteLabel(bomb.getSiteIndex()), bomb.getTimeLeft());
+            DrawText(buf, x + 14, y + 10, 20, blink ? util::rgba(255, 70, 70) : util::rgba(255, 150, 150));
+            if (bomb.getDefusePercent() > 0.0f)
+            {
+                DrawRectangle(x + 14, y + 44, w - 28, 12, util::rgba(30, 30, 30));
+                DrawRectangle(x + 14, y + 44, (int)((w - 28) * bomb.getDefusePercent()), 12, util::rgba(80, 180, 255));
+                DrawText("DEFUSING...", x + 14, y + 58, 12, util::rgba(120, 200, 255));
+            }
+            else
+            {
+                DrawText("Hold [E] next to the bomb to defuse it", x + 14, y + 44, 16, util::rgba(255, 200, 80));
+            }
+            break;
+        }
+
+        case BombState::Defused:
+            DrawText("BOMB DEFUSED", x + 14, y + 22, 24, util::rgba(100, 255, 140));
+            break;
+
+        case BombState::Exploded:
+            DrawText("BOMB EXPLODED", x + 14, y + 22, 24, util::rgba(255, 90, 60));
+            break;
+    }
+}
+
+void Game::drawHUD() const
+{
+    char buf[96];
+
+    // Damage flash
+    if (player->getDamageFlash() > 0.0f)
+        DrawRectangle(0, 0, SCREEN_W, SCREEN_H, Fade(RED, std::min(0.35f, player->getDamageFlash())));
+
+    // Round info (top-left)
+    DrawRectangle(10, 10, 250, 66, Fade(BLACK, 0.6f));
+    snprintf(buf, sizeof(buf), "ROUND %d / %d", round, (int)TOTAL_ROUNDS);
+    DrawText(buf, 22, 16, 24, RAYWHITE);
+    snprintf(buf, sizeof(buf), "TERRORISTS LEFT: %d", (int)enemies.size());
+    DrawText(buf, 22, 46, 18, util::rgba(255, 120, 120));
+
+    drawBombStatus();
+    drawMinimap();
+
+    // Health bar (bottom-left)
+    float ratio = player->getHealth() / player->getMaxHealth();
+    DrawRectangle(20, SCREEN_H - 58, 260, 38, Fade(BLACK, 0.6f));
+    DrawRectangle(28, SCREEN_H - 50, 244, 14, util::rgba(40, 40, 40));
+    DrawRectangle(28, SCREEN_H - 50, (int)(244 * ratio),14,
+                  util::rgba((unsigned char)(255 * (1.0f - ratio)), (unsigned char)(220 * ratio), 50));
+    snprintf(buf, sizeof(buf), "HP %d", (int)std::ceil(player->getHealth()));
+    DrawText(buf, 28, SCREEN_H - 34, 16, RAYWHITE);
+
+    // Weapon / ammo panel (bottom-right)
+    const Weapon& w = player->getCurrentWeapon();
+    int px = SCREEN_W - 290, py = SCREEN_H - 128;
+    DrawRectangle(px, py, 270, 108, Fade(BLACK, 0.6f));
+    DrawText(w.getName().c_str(), px + 12, py + 8, 22, RAYWHITE);
+    snprintf(buf, sizeof(buf), "%d / %d", w.getAmmo(), w.getMagazineSize());
+    DrawText(buf, px + 12, py + 36, 30, w.getAmmo() == 0 ? util::rgba(255, 90, 90) : util::rgba(255, 220, 120));
+    if (w.isReloading())
+    {
+        DrawText("RELOADING", px + 150, py + 44, 16, util::rgba(120, 200, 255));
+        DrawRectangle(px + 12, py + 76, 246, 6, util::rgba(40, 40, 40));
+        DrawRectangle(px + 12, py + 76, (int)(246 * w.getReloadProgress()), 6, util::rgba(120, 200, 255));
+    }
+    for (int i = 0; i < player->getWeaponCount(); i++)
+    {
+        bool current = (i == player->getCurrentWeaponIndex());
+        int sx = px + 12 + i * 62;
+        DrawRectangle(sx, py + 86, 56, 18, current ? util::rgba(80, 130, 230) : util::rgba(50, 50, 60));
+        snprintf(buf, sizeof(buf), "%d", i + 1);
+        DrawText(buf, sx + 22, py + 88, 14, RAYWHITE);
+    }
+
+    // Defuse prompt
+    if (bomb.isPlanted() && util::distance(player->getPosition(), bomb.getPosition()) <= DEFUSE_RANGE)
+        drawCentered("HOLD [E] TO DEFUSE", SCREEN_H - 130, 26, util::rgba(120, 200, 255));
+
+    // Messages
+    if (messageTimer > 0.0f && state == GameState::PLAYING)
+    {
+        int tw = MeasureText(message.c_str(), 22);
+        DrawRectangle((SCREEN_W - tw) / 2 - 12, 100, tw + 24, 34, Fade(BLACK, 0.6f));
+        drawCentered(message, 106, 22, util::rgba(255, 210, 90));
+    }
+
+    // Round intro
+    if (state == GameState::PLAYING && introTimer > 0.0f)
+    {
+        snprintf(buf, sizeof(buf), "ROUND %d", round);
+        drawCentered(buf, SCREEN_H / 2 - 70, 64, RAYWHITE);
+        snprintf(buf, sizeof(buf), "Get ready...  %.1f", introTimer);
+        drawCentered(buf, SCREEN_H / 2 + 5, 28, util::rgba(255, 210, 90));
+    }
+}
+
+void Game::drawMenuItems(const std::vector<std::string>& items, int startY) const
+{
+    for (size_t i = 0; i < items.size(); i++)
+    {
+        bool selected = ((int)i == menuIndex);
+        Rectangle r = util::rect(SCREEN_W / 2.0f - 150.0f, (float)(startY + (int)i * 56), 300.0f, 46.0f);
+        DrawRectangleRec(r, selected ? util::rgba(70, 120, 220) : util::rgba(40, 44, 54));
+        DrawRectangleLines((int)r.x, (int)r.y, (int)r.width, (int)r.height,
+                           selected ? RAYWHITE : util::rgba(90, 96, 110));
+        int tw = MeasureText(items[i].c_str(), 24);
+        DrawText(items[i].c_str(), (int)(r.x + (r.width - tw) / 2), (int)r.y + 11, 24, RAYWHITE);
+    }
+}
+
+void Game::drawMainMenu() const
+{
+    DrawRectangleGradientV(0, 0, SCREEN_W, SCREEN_H, util::rgba(20, 24, 34), util::rgba(8, 9, 14));
+    drawCentered("TOP-DOWN STRIKE", 90, 64, util::rgba(255, 190, 70));
+    drawCentered("Top-down tactical shooter  -  OOP Lab Project", 165, 22, util::rgba(170, 176, 190));
+    drawCentered("Defend bomb sites A and B from the Terrorists", 205, 20, util::rgba(120, 200, 255));
+
+    std::vector<std::string> items;
+    items.push_back("Start Game");
+    items.push_back("Quit");
+    drawMenuItems(items, 380);
+
+    int y = 520;
+    drawCentered("CONTROLS", y, 20, util::rgba(255, 210, 90));
+    drawCentered("WASD move   |   Mouse aim   |   Left click shoot   |   R reload", y + 30, 18, RAYWHITE);
+    drawCentered("1-4 / Mouse wheel switch weapon   |   Hold E near the bomb to defuse   |   P or ESC pause", y + 56, 18, RAYWHITE);
+    drawCentered("Use UP / DOWN and ENTER, or the mouse, in the menus", y + 90, 16, util::rgba(150, 156, 170));
+}
+
+void Game::drawPauseMenu() const
+{
+    DrawRectangle(0, 0, SCREEN_W, SCREEN_H, Fade(BLACK, 0.65f));
+    drawCentered("PAUSED", 200, 56, RAYWHITE);
+
+    std::vector<std::string> items;
+    items.push_back("Resume");
+    items.push_back("Restart Game");
+    items.push_back("Main Menu");
+    items.push_back("Quit");
+    drawMenuItems(items, 300);
+}
+
+void Game::drawRoundWon() const
+{
+    DrawRectangle(0, 0, SCREEN_W, SCREEN_H, Fade(BLACK, 0.6f));
+    char buf[64];
+    snprintf(buf, sizeof(buf), "ROUND %d WON", round);
+    drawCentered(buf, 220, 60, util::rgba(100, 255, 140));
+    drawCentered(endReason, 300, 24, RAYWHITE);
+    drawCentered("Next round: more and tougher terrorists.", 345, 20, util::rgba(255, 200, 80));
+    drawCentered("Press ENTER to continue", 410, 28, RAYWHITE);
+}
+
+void Game::drawEndScreen() const
+{
+    DrawRectangle(0, 0, SCREEN_W, SCREEN_H, Fade(BLACK, 0.7f));
+    if (state == GameState::VICTORY)
+    {
+        drawCentered("VICTORY!", 180, 72, util::rgba(100, 255, 140));
+        drawCentered("You defended the bomb sites in all rounds.", 270, 24, RAYWHITE);
+    }
+    else
+    {
+        char buf[64];
+        drawCentered("GAME OVER", 180, 72, util::rgba(255, 90, 80));
+        snprintf(buf, sizeof(buf), "You reached round %d of %d", round, (int)TOTAL_ROUNDS);
+        drawCentered(buf, 270, 24, RAYWHITE);
+    }
+    drawCentered(endReason, 315, 22, util::rgba(255, 210, 90));
+
+    std::vector<std::string> items;
+    items.push_back("Play Again");
+    items.push_back("Main Menu");
+    items.push_back("Quit");
+    drawMenuItems(items, 390);
+}
