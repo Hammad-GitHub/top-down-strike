@@ -1,61 +1,100 @@
-// Part 1: Abstract Weapon class (Template Method) and derived firearms
+// Weapon.h - abstract Weapon base class and four concrete weapons.
 #ifndef WEAPON_H
 #define WEAPON_H
 
 #include "raylib.h"
 #include "Bullet.h"
+#include <string>
 #include <vector>
 
+// All the numbers that make one weapon different from another.
 struct WeaponStats
 {
-    // TODO: Add damage, fireRate, magazineSize, reloadTime, bulletSpeed, spread, range
+    std::string name;
+    float damage;          // damage of ONE bullet / pellet
+    float fireInterval;    // seconds between shots (fire rate)
+    int magazineSize;      // magazine capacity
+    float reloadTime;      // seconds to reload
+    float bulletSpeed;     // pixels per second
+    float spread;          // random inaccuracy in degrees
+    bool automatic;        // hold the mouse button to keep firing?
+    float bulletLife;      // seconds a bullet lives (== range / speed)
+    float bulletRadius;
+    Color bulletColor;
 };
 
+// ABSTRACT class: shoot() is pure virtual, so a plain Weapon cannot be created.
 class Weapon
 {
-protected:
-    // TODO: Add WeaponStats, ammo count, cooldown timer, and reload state
+private:
+    WeaponStats stats;
+    int ammo;
+    float cooldown;
+    float reloadTimer;
+    bool reloading;
 
-    virtual void shoot(Vector2 origin, float angle, std::vector<Bullet>& bullets) = 0;
+protected:
+    // Helper for derived classes: creates one bullet with random spread.
+    void spawnBullet(std::vector<Bullet>& bullets, Vector2 muzzle, float angle,
+                     float spreadDegrees) const;
+    float getSpread() const;
 
 public:
-    Weapon() = default;
-    virtual ~Weapon() = default;
+    explicit Weapon(const WeaponStats& weaponStats);
+    virtual ~Weapon();
 
-    // TODO: Declare update(float dt), tryFire(...), startReload(), and getters
+    virtual void update(float dt);                       // timers (cooldown / reload)
+    virtual void shoot(Vector2 muzzle, float angle,
+                       std::vector<Bullet>& bullets) = 0; // each weapon fires differently
+
+    bool tryFire(Vector2 muzzle, float angle, std::vector<Bullet>& bullets);
+    void startReload();
+    void cancelReload();
+    void refill();
+
+    const std::string& getName() const;
+    int getAmmo() const;
+    int getMagazineSize() const;
+    bool isReloading() const;
+    float getReloadProgress() const;   // 0..1
+    bool isAutomatic() const;
+    float getDamage() const;
+    float getFireInterval() const;
+    float getReloadTime() const;
+    float getBulletSpeed() const;
 };
 
 class Pistol : public Weapon
 {
-protected:
-    void shoot(Vector2 origin, float angle, std::vector<Bullet>& bullets) override;
 public:
     Pistol();
-};
-
-class Shotgun : public Weapon
-{
-protected:
-    void shoot(Vector2 origin, float angle, std::vector<Bullet>& bullets) override;
-public:
-    Shotgun();
+    void shoot(Vector2 muzzle, float angle, std::vector<Bullet>& bullets) override;
 };
 
 class AssaultRifle : public Weapon
 {
-protected:
-    void shoot(Vector2 origin, float angle, std::vector<Bullet>& bullets) override;
+private:
+    float recoil;     // grows while you keep firing, makes bullets less accurate
 public:
     AssaultRifle();
-    // TODO: Override update(float dt) for recoil recovery
+    void update(float dt) override;
+    void shoot(Vector2 muzzle, float angle, std::vector<Bullet>& bullets) override;
 };
 
-class Sniper : public Weapon
+class Shotgun : public Weapon
 {
-protected:
-    void shoot(Vector2 origin, float angle, std::vector<Bullet>& bullets) override;
+private:
+    int pellets;
 public:
-    Sniper();
+    Shotgun();
+    void shoot(Vector2 muzzle, float angle, std::vector<Bullet>& bullets) override;
+};
+
+class SniperRifle : public Weapon
+{
+public:
+    SniperRifle();
+    void shoot(Vector2 muzzle, float angle, std::vector<Bullet>& bullets) override;
 };
 
 #endif
