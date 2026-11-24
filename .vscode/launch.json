@@ -14,9 +14,32 @@
       "MIMode": "gdb",
       "miDebuggerPath": "gdb",
       "setupCommands": [
-        { "description": "Pretty printing", "text": "-enable-pretty-printing", "ignoreFailures": true }
+        {
+          "description": "Pretty printing",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
       ],
       "preLaunchTask": "build top-down-strike (debug)"
+    },
+    {
+      "name": "C/C++ Runner: Debug Session",
+      "type": "cppdbg",
+      "request": "launch",
+      "args": [],
+      "stopAtEntry": false,
+      "externalConsole": true,
+      "cwd": "d:/Fast NUCES/Fall 2026/CL1004-Object Oriented Programming - Lab/top-down-strike/top-down-strike",
+      "program": "d:/Fast NUCES/Fall 2026/CL1004-Object Oriented Programming - Lab/top-down-strike/top-down-strike/build/Debug/outDebug",
+      "MIMode": "gdb",
+      "miDebuggerPath": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ]
     }
   ]
 }
