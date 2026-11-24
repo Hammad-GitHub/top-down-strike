@@ -12,7 +12,7 @@
         "-std=c++11",
         "-Wall",
         "main.cpp", "Game.cpp", "Character.cpp", "Player.cpp", "Enemy.cpp",
-        "Weapon.cpp", "Bullet.cpp", "Bomb.cpp", "Map.cpp",
+        "Weapon.cpp", "Bullet.cpp", "Bomb.cpp", "Map.cpp", "ScoreBoard.cpp",
         "-o", "top-down-strike.exe",
         // If raylib is NOT on your compiler's default path, add e.g.:
         // "-IC:/raylib/raylib/src", "-LC:/raylib/raylib/src",
@@ -31,7 +31,7 @@
         "-O2",
         "-std=c++11",
         "main.cpp", "Game.cpp", "Character.cpp", "Player.cpp", "Enemy.cpp",
-        "Weapon.cpp", "Bullet.cpp", "Bomb.cpp", "Map.cpp",
+        "Weapon.cpp", "Bullet.cpp", "Bomb.cpp", "Map.cpp", "ScoreBoard.cpp",
         "-o", "top-down-strike.exe",
         "-lraylib", "-lopengl32", "-lgdi32", "-lwinmm"
       ],
