@@ -9,7 +9,7 @@ static const float DEFUSE_RANGE = 70.0f;
 // ================================================================ setup
 
 Game::Game()
-    : map(), player(), enemies(), bullets(), effects(), bomb(),
+    : map(), player(), enemies(), bullets(), effects(), bomb(), scoreBoard(),
       state(GameState::MENU), round(1), targetSite(0), introTimer(0.0f),
       endReason(), message(), messageTimer(0.0f), menuIndex(0),
       lastMouse(util::vec(0.0f, 0.0f)), running(true)
@@ -20,6 +20,16 @@ Game::Game()
     camera.target = map.getPlayerSpawn();
     camera.rotation = 0.0f;
     camera.zoom = 1.0f;
+
+    // File handling + exception handling: load the saved high score if there is one.
+    try
+    {
+        scoreBoard.load();
+    }
+    catch (const ScoreFileException& e)
+    {
+        TraceLog(LOG_INFO, "%s", e.what());
+    }
 }
 
 Game::~Game() {}
@@ -56,6 +66,7 @@ void Game::showMessage(const std::string& text, float seconds)
 void Game::startNewGame()
 {
     round = 1;
+    scoreBoard.startNewGame();
     startRound();
 }
 
@@ -106,6 +117,24 @@ void Game::endRound(bool won, const std::string& reason)
         setState(round >= TOTAL_ROUNDS ? GameState::VICTORY : GameState::ROUND_WON);
     else
         setState(GameState::GAME_OVER);
+
+    if (won) scoreBoard.addPoints(100, round);       // function overloading (2 arguments)
+
+    if (state == GameState::GAME_OVER || state == GameState::VICTORY)
+    {
+        std::cout << scoreBoard << std::endl;         // friend operator<<
+        if (scoreBoard.updateBest())
+        {
+            try
+            {
+                scoreBoard.save();
+            }
+            catch (const ScoreFileException& e)
+            {
+                TraceLog(LOG_WARNING, "%s", e.what());
+            }
+        }
+    }
 }
 
 // ================================================================ update
@@ -309,6 +338,7 @@ void Game::removeDeadEnemies()
         if (!enemies[i]->isAlive())
         {
             effects.push_back(Effect(enemies[i]->getPosition(), 0.6f, 20.0f, util::rgba(160, 20, 20)));
+            scoreBoard += 10;                         // operator overloading
             enemies.erase(enemies.begin() + i);   // unique_ptr deletes the enemy
         }
         else
@@ -552,11 +582,13 @@ void Game::drawHUD() const
         DrawRectangle(0, 0, SCREEN_W, SCREEN_H, Fade(RED, std::min(0.35f, player->getDamageFlash())));
 
     // Round info (top-left)
-    DrawRectangle(10, 10, 250, 66, Fade(BLACK, 0.6f));
+    DrawRectangle(10, 10, 250, 98, Fade(BLACK, 0.6f));
     snprintf(buf, sizeof(buf), "ROUND %d / %d", round, (int)TOTAL_ROUNDS);
     DrawText(buf, 22, 16, 24, RAYWHITE);
     snprintf(buf, sizeof(buf), "TERRORISTS LEFT: %d", (int)enemies.size());
     DrawText(buf, 22, 46, 18, util::rgba(255, 120, 120));
+    snprintf(buf, sizeof(buf), "SCORE: %d   BEST: %d", scoreBoard.getCurrentScore(), scoreBoard.getBestScore());
+    DrawText(buf, 22, 84, 18, util::rgba(255, 210, 90));
 
     drawBombStatus();
     drawMinimap();
@@ -634,6 +666,9 @@ void Game::drawMainMenu() const
     drawCentered("TOP-DOWN STRIKE", 90, 64, util::rgba(255, 190, 70));
     drawCentered("Top-down tactical shooter  -  OOP Lab Project", 165, 22, util::rgba(170, 176, 190));
     drawCentered("Defend bomb sites A and B from the Terrorists", 205, 20, util::rgba(120, 200, 255));
+    char bestText[64];
+    snprintf(bestText, sizeof(bestText), "High score: %d   |   Games played: %d", scoreBoard.getBestScore(), ScoreBoard::getGamesPlayed());
+    drawCentered(bestText, 245, 20, util::rgba(255, 210, 90));
 
     std::vector<std::string> items;
     items.push_back("Start Game");
@@ -687,6 +722,9 @@ void Game::drawEndScreen() const
         drawCentered(buf, 270, 24, RAYWHITE);
     }
     drawCentered(endReason, 315, 22, util::rgba(255, 210, 90));
+    char scoreText[96];
+    snprintf(scoreText, sizeof(scoreText), "Score: %d   |   Best: %d", scoreBoard.getCurrentScore(), scoreBoard.getBestScore());
+    drawCentered(scoreText, 350, 22, RAYWHITE);
 
     std::vector<std::string> items;
     items.push_back("Play Again");
