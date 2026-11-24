@@ -8,6 +8,7 @@
 #include "Enemy.h"
 #include "Bullet.h"
 #include "Bomb.h"
+#include "ScoreBoard.h"
 #include <memory>
 #include <string>
 #include <vector>
@@ -32,6 +33,7 @@ private:
     std::vector<Bullet> bullets;
     std::vector<Effect> effects;
     Bomb bomb;
+    ScoreBoard scoreBoard;   // composition: score + saved high score
     Camera2D camera;
 
     // ---- Game flow
