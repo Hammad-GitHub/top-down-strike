@@ -285,3 +285,75 @@ void Game::updateBullets(float dt)
                  util::segmentHitsCircle(previous, current, player->getPosition(),
                                          player->getRadius() + b.getRadius()))
         {
+            player->takeDamage(b.getDamage());
+            effects.push_back(Effect(current, 0.22f, 7.0f, util::rgba(210, 30, 30)));
+            b.deactivate();
+        }
+
+        if (b.hitWall())
+        {
+            effects.push_back(Effect(current, 0.15f, 4.0f, util::rgba(255, 220, 120)));
+            b.deactivate();
+        }
+    }
+
+    bullets.erase(std::remove_if(bullets.begin(), bullets.end(),
+                                 [](const Bullet& b) { return !b.isActive(); }),
+                  bullets.end());
+}
+
+void Game::removeDeadEnemies()
+{
+    for (size_t i = 0; i < enemies.size();)
+    {
+        if (!enemies[i]->isAlive())
+        {
+            effects.push_back(Effect(enemies[i]->getPosition(), 0.6f, 20.0f, util::rgba(160, 20, 20)));
+            enemies.erase(enemies.begin() + i);   // unique_ptr deletes the enemy
+        }
+        else
+        {
+            i++;
+        }
+    }
+}
+
+void Game::updateBomb(float dt)
+{
+    // ---- Terrorists plant the bomb
+    if (!bomb.isPlanted() && !bomb.isDefused() && !bomb.isExploded())
+    {
+        Enemy* planter = NULL;
+        for (size_t i = 0; i < enemies.size(); i++)
+            if (enemies[i]->isPlanter()) planter = enemies[i].get();
+
+        // If nobody carries the bomb (or the carrier died), the closest terrorist picks it up.
+        if (planter == NULL && !enemies.empty())
+        {
+            Vector2 site = map.getSiteCenter(targetSite);
+            size_t best = 0;
+            for (size_t i = 1; i < enemies.size(); i++)
+                if (util::distance(enemies[i]->getPosition(), site) <
+                    util::distance(enemies[best]->getPosition(), site))
+                    best = i;
+
+            planter = enemies[best].get();
+            planter->setPlanter(true);
+            planter->setObjective(site);
+            if (bomb.isPlanting()) bomb.cancelPlant();
+        }
+
+        if (planter != NULL && planter->isAtObjective())
+            bomb.plant(dt, planter->getPosition(), targetSite);
+        else
+            bomb.cancelPlant();
+
+        if (bomb.isPlanted())
+        {
+            // Bomb is down: the terrorists now guard it.
+            for (size_t i = 0; i < enemies.size(); i++)
+            {
+                enemies[i]->setPlanter(false);
+                enemies[i]->setPatrolArea(bomb.getPosition(), 160.0f);
+            }
+            char buf[96];
